@@ -404,7 +404,6 @@ def change_parameters_deladd_last_cnp(ind, filters_len, pool_len, chans, max_cnp
     
     for conv, x_i in zip(ind["cnp_layers"]["last_cnp_layer"]["convs_exp"], range(len(sum_mutations_w))):
         # Sum_mutations is a list, then it can be handled as a mutable variable
-        # If this shit doesn't work, add a line to deepcopy the shit
         x = sum_mutations_w[x_i]
         
         if dif_in_channels > 0:
