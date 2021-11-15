@@ -18,7 +18,8 @@ import sys
 
 phiA = float(sys.argv[1])
 phiB = float(sys.argv[2])
-ar_name = str(sys.argv[3])
+n_tournament = int(sys.argv[3])
+ar_name = str(sys.argv[4])
 
 """# **AG-NE-AS settings**"""
 
@@ -34,7 +35,7 @@ SE = {"INDEX_IND": 0,
       "N_INDIVIDUALS": 20,
       "PHI_a": phiA,
       "PHI_b": phiB,
-      "N_TOURNMENT": 18,
+      "N_TOURNMENT": n_tournament,
       "N_SELECT": 2,
       "ADD_VALUE": [-2, 2],
       "G_PRIM": 3}
