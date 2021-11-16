@@ -1757,6 +1757,79 @@ def mutate_nfilters_last_cnp(ind):
     # modify number of input neurons from fc_l
     change_parameters_fcl(ind)
 
+"""# **CNNs CPU execution**"""
+def cnp_execution(inp, conv, non_linear, pooling):
+    return pooling(non_linear(conv(inp)))
+
+def last_cnp_execution(inp, convs, non_linear, pools):
+    out_convs = [conv(inp) for conv in convs]
+
+    out_nl = [non_linear(out) for out in out_convs]
+
+    out_pools = [pool(out) for out, pool in zip(out_nl, pools)]
+
+    return out_pools
+
+def fc_layer_execution(inp, linear, non_linear):
+    return non_linear(linear(inp))
+
+def cnn_forward(inp, individual):
+    cnp_layers = individual["cnp_layers"]
+    last_layer = individual["fc_layer"]
+    number_cnp_layers = individual["n_cl"] - 1
+    
+    x = inp
+    
+    for cnp in range(number_cnp_layers):
+        x = cnp_execution(x, cnp_layers[cnp]["cnp_exp"][0], cnp_layers[cnp]["cnp_exp"][1], cnp_layers[cnp]["cnp_exp"][2])
+
+    # This function, probably gets an error
+    last_x = last_cnp_execution(x, cnp_layers["last_cnp_layer"]["convs_exp"], cnp_layers["last_cnp_layer"]["non_exp"], cnp_layers["last_cnp_layer"]["pools_exp"])
+    
+    first_cat = [ten for ten in last_x]
+
+    x = torch.flatten(torch.cat(first_cat, 1), 1)
+
+    x = fc_layer_execution(x, last_layer["fc_exp"][0], last_layer["fc_exp"][1])
+
+    return x
+
+def fitness_cpu(ind, data, target):
+    count_corrects = 0
+
+    for matrix, targ in zip(data, target):
+        mat_torch = torch.from_numpy(matrix)
+        mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
+        output_pred = cnn_forward(mat_torch, ind)
+
+        if targ == torch.argmax(output_pred):
+            count_corrects += 1
+
+    ind["accuracy"] = count_corrects/len(target)
+
+def fitness_pop_cpu(pop, data, target):
+    for ind in pop:
+        count_corrects = 0
+
+        if ind == int(len(pop)/2):
+            print("Fitness is in middle way...")
+
+        for matrix, targ in zip(data, target):
+            mat_torch = torch.from_numpy(matrix)
+            mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
+            output_pred = cnn_forward(mat_torch, pop[ind])
+
+            if targ == torch.argmax(output_pred):
+                count_corrects += 1
+
+        pop[ind]["accuracy"] = count_corrects/len(target)
+
+    ord_pop = [{"id": p, "accuracy": pop[p]["accuracy"]} for p in pop]
+
+    ord_pop = sorted(ord_pop, key = lambda i: i['accuracy'], reverse = True)
+
+    return ord_pop
+
 """# **CNNs GPU execution**"""
 
 def cnp_execution_gpu(inp, conv, non_linear, pooling):
@@ -1818,7 +1891,7 @@ def fc_layer_execution_gpu(inp, linear, non_linear):
 
     return res
 
-def cnn_forward(inp, individual):
+def cnn_forward_gpu(inp, individual):
     cnp_layers = individual["cnp_layers"]
     last_layer = individual["fc_layer"]
     number_cnp_layers = individual["n_cl"] - 1
@@ -1844,6 +1917,42 @@ def cnn_forward(inp, individual):
 
     return x
 
+def fitness_gpu(ind, data, target):
+    count_corrects = 0
+
+    for matrix, targ in zip(data, target):
+        mat_torch = torch.from_numpy(matrix)
+        mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
+        output_pred = cnn_forward_gpu(mat_torch, ind)
+
+        if targ == torch.argmax(output_pred):
+            count_corrects += 1
+
+    ind["accuracy"] = count_corrects/len(target)
+
+def fitness_pop_gpu(pop, data, target):
+    for ind in pop:
+        count_corrects = 0
+
+        if ind == int(len(pop)/2):
+            print("Fitness is in middle way...")
+
+        for matrix, targ in zip(data, target):
+            mat_torch = torch.from_numpy(matrix)
+            mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
+            output_pred = cnn_forward_gpu(mat_torch, pop[ind])
+
+            if targ == torch.argmax(output_pred):
+                count_corrects += 1
+
+        pop[ind]["accuracy"] = count_corrects/len(target)
+
+    ord_pop = [{"id": p, "accuracy": pop[p]["accuracy"]} for p in pop]
+
+    ord_pop = sorted(ord_pop, key = lambda i: i['accuracy'], reverse = True)
+
+    return ord_pop
+
 """# **Algorithm main**"""
 
 def best_ind(pop):
@@ -1863,50 +1972,14 @@ def fitness_only(ind, data, target):
     for matrix, targ in zip(data, target):
         mat_torch = torch.from_numpy(matrix)
         mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
-        output_pred = cnn_forward(mat_torch, ind)
+        output_pred = cnn_forward_gpu(mat_torch, ind)
 
         if targ == torch.argmax(output_pred):
             count_corrects += 1
 
     return count_corrects/len(target)
 
-def fitness(ind, data, target):
-    count_corrects = 0
-
-    for matrix, targ in zip(data, target):
-        mat_torch = torch.from_numpy(matrix)
-        mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
-        output_pred = cnn_forward(mat_torch, ind)
-
-        if targ == torch.argmax(output_pred):
-            count_corrects += 1
-
-    ind["accuracy"] = count_corrects/len(target)
-
 def sort_by_accuracy(pop):
-    ord_pop = [{"id": p, "accuracy": pop[p]["accuracy"]} for p in pop]
-
-    ord_pop = sorted(ord_pop, key = lambda i: i['accuracy'], reverse = True)
-
-    return ord_pop
-
-def fitness_pop(pop, data, target):
-    for ind in pop:
-        count_corrects = 0
-
-        if ind == int(len(pop)/2):
-            print("Fitness is in middle way...")
-
-        for matrix, targ in zip(data, target):
-            mat_torch = torch.from_numpy(matrix)
-            mat_torch = torch.reshape(mat_torch, (1, 1, SE["INPUT_LEN"][0], SE["INPUT_LEN"][1])).to(dtype=torch.float)
-            output_pred = cnn_forward(mat_torch, pop[ind])
-
-            if targ == torch.argmax(output_pred):
-                count_corrects += 1
-
-        pop[ind]["accuracy"] = count_corrects/len(target)
-
     ord_pop = [{"id": p, "accuracy": pop[p]["accuracy"]} for p in pop]
 
     ord_pop = sorted(ord_pop, key = lambda i: i['accuracy'], reverse = True)
@@ -2172,6 +2245,15 @@ population = create_population(SE["N_INDIVIDUALS"],
                                   SE["INPUT_LEN"])
 
 current_generation = 1
+
+# If the 
+fitness_pop = fitness_pop_cpu
+fitness = fitness_cpu
+
+if torch.cuda.is_available():
+    if torch.cuda.device_count() > 0:
+        fitness_pop = fitness_pop_gpu
+        fitness = fitness_gpu
 
 print("**********", ar_name, "**********")
 #print("Running first fitness of individuals...")
